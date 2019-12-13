@@ -1,0 +1,215 @@
+mads 2.0.6 build 58 (28 Jan 17)
+Source: C:\jac\wudsn\Workspace\SPARKS\SPARKS.ASM
+     1 				; "Sparks", Atari XL/XE Intro 256B
+     2 				; code by tr1x
+     3 				; requirements: original Atari XL/XE 64KB PAL
+     4 				; version: 1.0
+     5 				; release date: 2019-12-07
+     6
+     7 					org $0600
+     8
+     9 				;debug	equ 1		; for graphics preview of sine wave
+    10 = 0000			offset	equ 0		; display list offset, used for preview only
+    11
+    12 = 0080			gtia10	equ $80		; graphics 10 (GTIA mode)
+    13 = 00CB			memdl1	equ $00cb
+    14 = 00CD			memdl2	equ $00cd
+    15 = 00CF			memvp1	equ $00cf
+    16 = 00D1			delta	equ $00d1
+    17 = 00D3			value	equ $00d3
+    18 = 00D5			memdbg1	equ $00d5
+    19 = 00D7			memdbg2	equ $00d7
+    20 = 026F			gprior	equ $026f
+    21 = 02C1			pcolr1	equ $02c1
+    22 = 0800			sinwav	equ $0800
+    23 = 4000			vidptr	equ $4000	; video memory
+    24 = 9C20			dlist	equ $9c20	; display list
+    25 = D013			colpm1	equ $d013
+    26 = D20A			random	equ $d20a
+    27 = D40B			vcount	equ $d40b
+    28
+    29 					; generate fake sine wave array using parabolas
+    30 FFFF> 0600-06E9> A0 3F		ldy #$3f
+    31 0602 A2 00			ldx #$00	
+    32 0604 A5 D3		loopa1	lda value
+    33 0606 65 D1			adc delta
+    34 0608 85 D3			sta value
+    35 060A A5 D4			lda value+1
+    36 060C 69 00			adc #$00	; accumulate carry flag
+    37 060E 85 D4			sta value+1
+    38 0610 99 40 08			sta sinwav+$40,y
+    39 0613 9D 80 08			sta sinwav+$80,x
+    40 0616 49 3F			eor #$3f
+    41 0618 9D 00 08			sta sinwav+$00,x
+    42 061B 99 C0 08			sta sinwav+$c0,y
+    43 061E A5 D1			lda delta
+    44 0620 69 04			adc #$04
+    45 0622 85 D1			sta delta
+    46 0624 E8				inx
+    47 0625 88				dey
+    48 0626 10 DC			bpl loopa1
+    49
+    50 					; prepare display list
+    51 0628 A2 23			ldx #<dlist+3
+    52 062A 86 CB			stx memdl1
+    53 062C A9 9C			lda #>dlist
+    54 062E 85 CC			sta memdl1+1
+    55 0630 A2 C0			ldx #$c0
+    56 0632 C8				iny		; ldy #$00
+    57 0633 A9 4F		loopb1	lda #$4f	; ANTIC command: gr.mode | address
+    58 0635 91 CB			sta (memdl1),y
+    59 0637 E6 CB			inc memdl1
+    60 					;bne skipb1	; not needed,
+    61 					;inc memdl1+1	; ..since does not occur in practice
+    62 0639 AD 0A D2		skipb1	lda random
+    63 063C 29 C0			and #%11000000	; $..00, $..40, $..80, $..c0
+    64 063E 91 CB			sta (memdl1),y
+    65 0640 E6 CB			inc memdl1
+    66 0642 D0 02			bne skipb2
+    67 0644 E6 CC			inc memdl1+1
+    68 0646 AD 0A D2		skipb2	lda random
+    69 0649 29 3F			and #%00111111
+    70 					;clc		; not needed in practice
+    71 064B 69 09			adc #$09
+    72 064D 91 CB			sta (memdl1),y
+    73 064F E6 CB			inc memdl1
+    74 0651 D0 02			bne skipb3
+    75 0653 E6 CC			inc memdl1+1
+    76 0655 CA			skipb3	dex
+    77 0656 D0 DB			bne loopb1
+    78
+    79 					;lda #$41	; jump to the beginning of display list
+    80 					;sta dlist+$243	; ..is not necessary
+    81 					;lda #<dlist
+    82 					;sta dlist+$244
+    83 					;lda #>dlist
+    84 					;sta dlist+$245
+    85
+    86 					; set GTIA graphics mode
+    87 0658 A9 80			lda #gtia10
+    88 065A 8D 6F 02			sta gprior
+    89
+    90 					; draw sine wave
+    91 					;lda <vidptr	; not needed
+    92 					;sta memvp1
+    93 065D A9 40			lda >vidptr
+    94 065F 85 D0			sta memvp1+1
+    95 0661			loopc1
+    96 0661 AD 00 08		opcodc1	lda sinwav
+    97 0664 18				clc
+    98 0665 69 07			adc #$07
+    99 0667 4A				lsr
+   100 0668 A8				tay
+   101 0669 A2 00		opcodc2	ldx #$00
+   102 066B B0 02			bcs skipc2
+   103 066D E8				inx
+   104 066E E8				inx
+   105 066F BD E2 06		skipc2	lda colors,x
+   106 0672 91 CF			sta (memvp1),y
+   107 0674 E6 CF			inc memvp1
+   108 0676 E8				inx
+   109 0677 BD E2 06			lda colors,x
+   110 067A 91 CF			sta (memvp1),y
+   111 067C 18				clc
+   112 067D A5 CF			lda memvp1
+   113 067F 69 3F			adc #$40-1
+   114 0681 85 CF			sta memvp1
+   115 0683 D0 02			bne skipc3
+   116 0685 E6 D0			inc memvp1+1
+   117 0687 EE 62 06		skipc3	inc opcodc1+1
+   118 068A 10 05			bpl skipc4
+   119 068C A9 04			lda #$04
+   120 068E 8D 6A 06			sta opcodc2+1
+   121 0691 D0 CE		skipc4	bne loopc1
+   122
+   123 					; for sine wave preview; not needed for normal operation
+   124 				.if .def debug
+   125 					lda #<dlist+4
+   126 					sta memdbg1
+   127 					lda #>dlist
+   128 					sta memdbg1+1
+   129 					lda #<vidptr
+   130 					sta memdbg2
+   131 					lda #>vidptr+offset
+   132 					sta memdbg2+1
+   133 					ldx #$c0
+   134 					ldy #$00
+   135 				loopd1	lda memdbg2
+   136 					sta (memdbg1),y
+   137 					inc memdbg1
+   138 					bne skipd1
+   139 					inc memdbg1+1
+   140 				skipd1	lda memdbg2+1
+   141 					sta (memdbg1),y
+   142 					lda memdbg2
+   143 					clc
+   144 					adc #$40
+   145 					sta memdbg2
+   146 					bne skipd2
+   147 					inc memdbg2+1
+   148 				skipd2	inc memdbg1
+   149 					bne skipd3
+   150 					inc memdbg1+1
+   151 				skipd3	inc memdbg1
+   152 					bne skipd4
+   153 					inc memdbg1+1
+   154 				skipd4	dex
+   155 					bne loopd1
+   156 					lda #$92
+   157 					sta pcolr1
+   158 					lda #$94
+   159 					sta pcolr1+1
+   160 					lda #$98
+   161 					sta pcolr1+2
+   162 					lda #$9e
+   163 					sta pcolr1+3
+   164 					jmp *
+   165 				.endif
+   166
+   167 					; display list animation
+   168 0693 A9 24		anim	lda #<dlist+4
+   169 0695 85 CD			sta memdl2
+   170 0697 A9 9C			lda #>dlist
+   171 0699 85 CE			sta memdl2+1
+   172 069B A2 C0			ldx #$c0
+   173 069D AD 0B D4		loope1	lda vcount
+   174 06A0 0A				asl
+   175 06A1 0A				asl
+   176 06A2 0A				asl
+   177 06A3 0A				asl
+   178 06A4 69 02			adc #$02
+   179 06A6 8D 13 D0			sta colpm1
+   180 06A9 69 02			adc #$02
+   181 06AB 8D 14 D0			sta colpm1+1
+   182 06AE 69 04			adc #$04
+   183 06B0 8D 15 D0			sta colpm1+2
+   184 06B3 69 06			adc #$06
+   185 06B5 8D 16 D0			sta colpm1+3
+   186 06B8 A0 00			ldy #$00
+   187 06BA B1 CD			lda (memdl2),y
+   188 06BC 18				clc
+   189 06BD 69 40			adc #64
+   190 06BF 91 CD			sta (memdl2),y
+   191 06C1 D0 0C			bne skipe1
+   192 06C3 C8				iny
+   193 06C4 B1 CD			lda (memdl2),y
+   194 06C6 18				clc
+   195 06C7 69 01			adc #1
+   196 06C9 10 02			bpl skipe2
+   197 06CB A9 40			lda #>vidptr
+   198 06CD 91 CD		skipe2	sta (memdl2),y
+   199 06CF E6 CD		skipe1	inc memdl2
+   200 06D1 D0 02			bne skipe3
+   201 06D3 E6 CE			inc memdl2+1
+   202 06D5 E6 CD		skipe3	inc memdl2
+   203 06D7 D0 02			bne skipe4
+   204 06D9 E6 CE			inc memdl2+1
+   205 06DB E6 CD		skipe4	inc memdl2
+   206 					;bne skipe5	; not needed,
+   207 					;inc memdl2+1	; ..since does not occur in practice
+   208 06DD CA			skipe5	dex
+   209 06DE D0 BD			bne loope1
+   210 06E0 10 B1			bpl anim	; 1 byte less than "jmp anim"
+   211
+   212 06E2 02 11 21 10		colors	.byte $02, $11, $21, $10	; dark
+   213 06E6 02 34 23 40			.byte $02, $34, $23, $40	; bright
